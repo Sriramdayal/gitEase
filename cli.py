@@ -27,6 +27,9 @@ def print_error(message):
 def print_info(message):
     print(f"{BColors.OKCYAN}i {message}{BColors.ENDC}")
 
+def print_warning(message):
+    print(f"{BColors.WARNING}! {message}{BColors.ENDC}")
+
 def print_command(command):
     print(f"{BColors.WARNING}$ {command}{BColors.ENDC}")
 
@@ -146,8 +149,14 @@ def push_to_remote():
     
     print_info(f"This will push local '{local_branch}' to remote 'origin/{remote_branch}'.")
     if input("Continue? (y/n): ").lower() == 'y':
-        run_command(f"git push origin {local_branch}:{remote_branch}")
-        print_success("Push completed.")
+        output, error = run_command(f"git push origin {local_branch}:{remote_branch}")
+        if error is None:
+            print_success("Push completed.")
+        elif "fetch first" in error or "[rejected]" in error:
+            # This specific error is handled here to provide a better hint
+            print_error("Push rejected because the remote has changes you don't have locally.")
+            print_info("Please use the 'Pull from Remote' option (5) to integrate remote changes first.")
+        # Other errors are already printed by run_command, so no 'else' is needed.
     else:
         print_info("Push cancelled.")
 
