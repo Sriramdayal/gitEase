@@ -155,26 +155,76 @@ def push_to_remote():
         elif "fetch first" in error or "[rejected]" in error:
             # This specific error is handled here to provide a better hint
             print_error("Push rejected because the remote has changes you don't have locally.")
-            print_info("Please use the 'Pull from Remote' option (5) to integrate remote changes first.")
+            print_info("Please use the 'Pull from Remote' option to integrate remote changes first.")
         # Other errors are already printed by run_command, so no 'else' is needed.
     else:
         print_info("Push cancelled.")
 
+def rebase_branch():
+    print_header("5. Rebase Current Branch")
+    if not is_git_repo():
+        print_error("Not a Git repository."); return
+
+    current_branch, _ = run_command("git rev-parse --abbrev-ref HEAD", show_output=False)
+    if not current_branch:
+        print_error("Could not determine the current branch."); return
+
+    print_info(f"You are currently on branch: '{current_branch}'")
+    if current_branch in ['main', 'master']:
+        print_warning("You are on a main branch. Rebasing it is generally not recommended.")
+        if input("Are you sure you want to continue? (y/n): ").lower() != 'y':
+            print_info("Rebase cancelled."); return
+
+    base_branch = input("Enter the branch to rebase onto (e.g., main): ").strip()
+    if not base_branch:
+        print_error("Base branch cannot be empty."); return
+
+    print_info(f"This will re-apply commits from '{current_branch}' on top of '{base_branch}'.")
+    if input("Continue? (y/n): ").lower() == 'y':
+        output, error = run_command(f"git rebase {base_branch}")
+        if error is None:
+            print_success("Rebase completed successfully.")
+        elif "CONFLICT" in (error or ""):
+            print_error("Automatic rebase failed due to conflicts.")
+            print_info("Please resolve the conflicts in your editor.")
+            print_info(f"Then run '{BColors.BOLD}git add .'{BColors.ENDC} for the resolved files.")
+            print_info(f"And continue with '{BColors.BOLD}git rebase --continue'{BColors.ENDC}.")
+            print_info(f"To cancel, run '{BColors.BOLD}git rebase --abort'{BColors.ENDC}.")
+    else:
+        print_info("Rebase cancelled.")
+
 def pull_from_remote():
-    print_header("5. Pull from Remote")
+    print_header("6. Pull from Remote")
     if not is_git_repo(): print_error("Not a Git repository."); return
     local_branch, _ = run_command("git rev-parse --abbrev-ref HEAD", show_output=False)
     if not local_branch: print_error("Could not determine local branch."); return
     remote_branch = input(f"Enter remote branch to pull from [{local_branch}]: ").strip() or local_branch
     print_info(f"Pulling from 'origin/{remote_branch}' and merging into local '{local_branch}'.")
+    
     if input("Continue? (y/n): ").lower() == 'y':
-        run_command(f"git pull origin {remote_branch}")
-        print_success("Pull completed.")
+        print_info("How should divergent branches be reconciled?")
+        print("  1. Merge (creates a merge commit) [Default]")
+        print("  2. Rebase (re-applies your commits on top)")
+        print("  3. Fast-Forward Only (aborts if branches have diverged)")
+        strategy_choice = input("Choose a strategy (1-3): ").strip()
+
+        command = f"git pull origin {remote_branch}"
+        if strategy_choice == '2':
+            command += " --rebase"
+        elif strategy_choice == '3':
+            command += " --ff-only"
+        else: # Default to merge
+            command += " --no-rebase"
+
+        output, error = run_command(command)
+        if error is None:
+            print_success("Pull completed.")
+        # The run_command function already prints detailed errors, so we don't need extra handling here.
     else:
         print_info("Pull cancelled.")
 
 def branch_management():
-    print_header("6. Branch Management")
+    print_header("7. Branch Management")
     if not is_git_repo(): print_error("Not a Git repository."); return
     
     while True:
@@ -209,12 +259,12 @@ def branch_management():
             print_error("Invalid choice.")
 
 def show_status():
-    print_header("7. Show Status")
+    print_header("8. Show Status")
     if not is_git_repo(): print_error("Not a Git repository."); return
     run_command("git status")
 
 def view_commit_history():
-    print_header("8. View Commit History")
+    print_header("9. View Commit History")
     if not is_git_repo(): print_error("Not a Git repository."); return
     run_command("git log --graph --oneline --decorate --all")
 
@@ -238,28 +288,28 @@ def main():
             print(f"{BColors.WARNING}✗ No Git repository detected.{BColors.ENDC}")
 
         print("\nWhat would you like to do?")
-        print("  1. Initialize Repo             5. Pull from Remote")
-        print("  2. Set Remote URL              6. Branch Management")
-        print("  3. Add & Commit All Changes    7. Show Status")
-        print("  4. Push to Remote              8. View Commit History")
-        print("  9. Exit")
-        
-        choice = input("\nEnter your choice (1-9): ")
+        print("  1. Initialize Repo             6. Pull from Remote")
+        print("  2. Set Remote URL              7. Branch Management")
+        print("  3. Add & Commit All Changes    8. Show Status")
+        print("  4. Push to Remote              9. View Commit History")
+        print("  5. Rebase Current Branch       10. Exit")
+
+        choice = input("\nEnter your choice (1-10): ")
         
         actions = {
             '1': initialize_repo, '2': set_remote, '3': add_and_commit,
-            '4': push_to_remote, '5': pull_from_remote, '6': branch_management,
-            '7': show_status, '8': view_commit_history
+            '4': push_to_remote, '5': rebase_branch, '6': pull_from_remote,
+            '7': branch_management, '8': show_status, '9': view_commit_history
         }
 
         if choice in actions:
             actions[choice]()
-        elif choice == '9':
+        elif choice == '10':
             print_info("Exiting GitEase CLI. Goodbye!"); break
         else:
-            print_error("Invalid choice. Please enter a number between 1 and 9.")
+            print_error("Invalid choice. Please enter a number between 1 and 10.")
         
-        if choice != '9':
+        if choice != '10':
             input("\nPress Enter to return to the menu...")
 
 if __name__ == "__main__":
